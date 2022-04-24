@@ -62,13 +62,13 @@ public class KafkaSimpleConsumer extends KafkaClusterComponent {
         final Callable<Boolean> consumerTask = () -> {
             while (true) {
 
-                System.out.println("KafkaSimpleConsumer iterating...");
+                System.out.println("KafkaSimpleConsumer" + this +" iterating...");
 
                 final ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
                 for (ConsumerRecord<String, String> record : records) {
                     // print the offset,key and value for the consumer records.
                     System.out.printf("%s topic = %s, offset = %d, key = %s, value = %s\n",
-                            KafkaSimpleConsumer.class.getName(),
+                            "KafkaSimpleConsumer" + this,
                             record.topic(),
                             record.offset(),
                             record.key(),
@@ -78,14 +78,7 @@ public class KafkaSimpleConsumer extends KafkaClusterComponent {
             }
         };
 
-        final List<Callable<Boolean>> callableTasks = new ArrayList<>();
-        callableTasks.add(consumerTask);
-
-        try {
-            executorService.invokeAll(callableTasks);
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        executorService.submit(consumerTask);
 
         return this;
     }

@@ -60,7 +60,7 @@ public class KafkaFileProducer extends KafkaClusterComponent {
             while (line != null) {
                 final ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, "default-key", line);
                 producer.send(producerRecord);
-                System.out.printf("%s topic = %s, key = %s, value = %s\n",
+                System.out.printf("%s sent topic = %s, key = %s, value = %s\n",
                         KafkaFileProducer.class.getName(),
                         producerRecord.topic(),
                         producerRecord.key(),
