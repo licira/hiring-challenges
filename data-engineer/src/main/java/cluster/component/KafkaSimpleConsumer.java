@@ -1,6 +1,7 @@
 package cluster.component;
 
 import cluster.KafkaCluster;
+import helper.Count;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -19,6 +20,8 @@ public class KafkaSimpleConsumer extends KafkaClusterComponent {
     private final Properties properties;
     private final String topic;
     private KafkaConsumer<String, String> consumer;
+    private KafkaForwardProducer<String> forwardProducer;
+    private Count synchronizedCounter;
 
     public KafkaSimpleConsumer(final Properties properties,
                                final String topic,
@@ -26,67 +29,73 @@ public class KafkaSimpleConsumer extends KafkaClusterComponent {
         super(executorService);
         this.properties = properties;
         this.topic = topic;
+        this.consumer = new KafkaConsumer<String, String>(this.properties);
     }
 
-    public static void main(final String... args) throws IOException {
-        new KafkaSimpleConsumer(defaultProperties(),
-                args[0],
-                KafkaCluster.getExecutorService())
-                .start();
+    public KafkaSimpleConsumer(final Properties properties,
+                               final String topic,
+                               final ExecutorService executorService,
+                               final Count synchronizedCounter) {
+        super(executorService);
+        this.properties = properties;
+        this.topic = topic;
+        this.synchronizedCounter = synchronizedCounter;
+        this.consumer = new KafkaConsumer<String, String>(this.properties);
     }
 
-    private static Properties defaultProperties() {
-        // create instance for properties to access producer configs
-        final Properties props = new Properties();
-        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("bootstrap.servers", "localhost:9092");
-        props.put("group.id", "test-group");
-        return props;
+    public KafkaSimpleConsumer setForwardProducer(final KafkaForwardProducer forwardProducer) {
+        this.forwardProducer = forwardProducer;
+        return this;
     }
 
     @Override
-    public KafkaClusterComponent start() throws IOException {
-        System.out.println("Starting KafkaSimpleConsumer");
-
-        this.consumer = new KafkaConsumer<String, String>(properties);
-
-        //Kafka Consumer subscribes list of topics here.
+    public KafkaSimpleConsumer start() {
+        starting();
+        // Kafka Consumer subscribes list of topics here.
         consumer.subscribe(Arrays.asList(topic));
+        // Print the topic name.
+        System.out.println(this + " subscribed to topic: " + topic);
 
-        //print the topic name
-        System.out.println("Subscribed to topic: " + topic);
+        if (forwardProducer != null) {
+            forwardProducer.start();
+        }
 
-        final Callable<Boolean> consumerTask = () -> {
+        submit(task());
+
+        return this;
+    }
+
+    @Override
+    public KafkaSimpleConsumer stop() {
+        stopping();
+        consumer.close();
+        forwardProducer.stop();
+        return this;
+    }
+
+    private Callable task() {
+        return () -> {
             while (true) {
 
-                System.out.println("KafkaSimpleConsumer" + this +" iterating...");
+                iterating();
 
                 final ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
-                for (ConsumerRecord<String, String> record : records) {
+
+                final List<String> consumerRecordValues = new ArrayList<>(records.count());
+
+                for (ConsumerRecord<String, String> consumerRecord : records) {
                     // print the offset,key and value for the consumer records.
-                    System.out.printf("%s topic = %s, offset = %d, key = %s, value = %s\n",
-                            "KafkaSimpleConsumer" + this,
-                            record.topic(),
-                            record.offset(),
-                            record.key(),
-                            record.value());
+                    printReceived(consumerRecord);
+                    consumerRecordValues.add(consumerRecord.value());
+                }
+                if (forwardProducer != null) {
+                    forwardProducer.addAll(consumerRecordValues);
+                }
+                if (synchronizedCounter != null) {
+                    synchronizedCounter.add(records.count());
                 }
                 consumer.commitSync();
             }
         };
-
-        executorService.submit(consumerTask);
-
-        return this;
-    }
-
-    @Override
-    public KafkaClusterComponent stop() {
-        consumer.close();
-        System.out.println("Stopping KafkaSimpleConsumer");
-        return this;
     }
 }

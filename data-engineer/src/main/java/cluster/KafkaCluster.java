@@ -1,6 +1,8 @@
 package cluster;
 
 import cluster.component.*;
+import helper.Count;
+import helper.StreamGobbler;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -19,53 +21,25 @@ public class KafkaCluster {
 
     private static final String PROPERTIES_TEMP_PATH = "src/main/resources/properties/temp";
 
-    public static void main(final String... args) throws IOException, InterruptedException {
+    public static void startKafkaCountProducer(final ExecutorService executorService,
+                                               final Count synchronizedCounter,
+                                               final Properties kafkaClusterProperties) throws IOException {
 
-        // Create executor service.
-        final ExecutorService executorService = getExecutorService();
+        final Properties properties =
+                readProperties(kafkaClusterProperties.getProperty("kafka.producer.properties"));
 
-        System.out.println("Starting Kafka Cluster.");
+        final String bootstrapServers = bootstrapServers(Integer.parseInt(kafkaClusterProperties.getProperty("kafka.servers")));
+        properties.put("bootstrap.servers", bootstrapServers);
 
-        // Read program arguments.
-        final String kafkaClusterPropertiesPath = args[0];
+        startKafkaComponent(new KafkaCountProducer(properties,
+                "count",
+                synchronizedCounter,
+                executorService));
 
-        // Read kafka cluster properties.
-        final Properties kafkaClusterProperties =
-                kafkaClusterProperties(kafkaClusterPropertiesPath);
-
-        final String kafkaDir = kafkaClusterProperties.getProperty("kafka.home");
-        final String zookeeperPropertiesPath = kafkaClusterProperties.getProperty("zookeeper.properties");
-        final String kafkaServerPropertiesPath = kafkaClusterProperties.getProperty("kafka.server.properties.template");
-        final String topic = kafkaClusterProperties.getProperty("kafka.topic");
-
-        // Create temp folder.
-        createFolder(PROPERTIES_TEMP_PATH);
-        crateKafkaServersPropertiesFiles(kafkaClusterProperties, kafkaServerPropertiesPath, PROPERTIES_TEMP_PATH);
-
-        // Start Zookeeper.
-        startKafkaComponent(new Zookeeper(executorService, kafkaDir, zookeeperPropertiesPath));
-
-        // Start Kafka Servers (Brokers).
-        startKafkaServers(executorService,
-                kafkaDir,
-                kafkaClusterProperties);
-
-        Thread.sleep(5000);
-
-        // Start Kafka Consumers.
-        startKafkaConsumers(executorService,
-                kafkaClusterProperties);
-
-        // Start Kafka Producers.
-        startKafkaProducers(kafkaClusterProperties, executorService);
-
-        stopWithShutdownHook(executorService);
-
-        while (true);
     }
 
-    private static void startKafkaProducers(final Properties kafkaClusterProperties,
-                                            final ExecutorService executorService) throws IOException {
+    public static void startKafkaProducers(final Properties kafkaClusterProperties,
+                                           final ExecutorService executorService) throws IOException {
         final Properties properties =
                 readProperties(kafkaClusterProperties.getProperty("kafka.producer.properties"));
 
@@ -76,26 +50,46 @@ public class KafkaCluster {
                 kafkaClusterProperties.getProperty("kafka.topic"),
                 "/Users/liviuc/Documents/work/hiring-challenges/data-engineer/src/main/resources/stream.json",
                 executorService));
-
     }
 
-    private static void startKafkaConsumers(final ExecutorService executorService,
-                                            final Properties kafkaClusterProperties) throws IOException {
-        final String topic = kafkaClusterProperties.getProperty("kafka.topic");
-
+    public static void startKafkaConsumerWithDefaultTopic(final ExecutorService executorService,
+                                                          final Properties kafkaClusterProperties) throws IOException {
         final Properties properties = readProperties(kafkaClusterProperties.getProperty("kafka.consumer.properties"));
 
         final String bootstrapServers = bootstrapServers(Integer.parseInt(kafkaClusterProperties.getProperty("kafka.servers")));
         properties.put("bootstrap.servers", bootstrapServers);
 
+        properties.put("group.id", "default-group");
+
+        startKafkaComponent(new KafkaSimpleConsumer(properties,
+                "default-topic",
+                executorService));
+    }
+
+    public static void startKafkaConsumersWithForwardConsumers(final ExecutorService executorService,
+                                                               final Count synchronizedCounter,
+                                                               final Properties kafkaClusterProperties) throws IOException {
+        final String topic = kafkaClusterProperties.getProperty("kafka.topic");
+
+        final Properties consumerProperties = readProperties(kafkaClusterProperties.getProperty("kafka.consumer.properties"));
+        final Properties producerProperties = readProperties(kafkaClusterProperties.getProperty("kafka.producer.properties"));
+
+        final String bootstrapServers = bootstrapServers(Integer.parseInt(kafkaClusterProperties.getProperty("kafka.servers")));
+        consumerProperties.put("bootstrap.servers", bootstrapServers);
+        producerProperties.put("bootstrap.servers", bootstrapServers);
+
         for (int i = 0; i < Integer.parseInt(kafkaClusterProperties.getProperty("kafka.consumers")); i++) {
-            startKafkaComponent(new KafkaSimpleConsumer(properties,
+            startKafkaComponent(new KafkaSimpleConsumer(consumerProperties,
                     topic,
-                    executorService));
+                    executorService,
+                    synchronizedCounter)
+                    .setForwardProducer(
+                            new KafkaForwardProducer(producerProperties, "forward-topic", executorService))
+            );
         }
     }
 
-    private static String bootstrapServers(final int kafkaServers) {
+    public static String bootstrapServers(final int kafkaServers) {
         final List<String> bootstrapServers = new ArrayList<>();
         for (int i = 0; i < kafkaServers; i++) {
             bootstrapServers.add("localhost:" + (9092 + i));
@@ -104,9 +98,9 @@ public class KafkaCluster {
                 .collect(Collectors.joining(","));
     }
 
-    private static void startKafkaServers(final ExecutorService executorService,
-                                          final String kafkaDir,
-                                          final Properties kafkaClusterProperties) throws IOException {
+    public static void startKafkaServers(final ExecutorService executorService,
+                                         final String kafkaDir,
+                                         final Properties kafkaClusterProperties) throws IOException {
 
         for (int i = 0; i < Integer.parseInt(kafkaClusterProperties.getProperty("kafka.servers")); i++) {
             startKafkaComponent(new KafkaServer(executorService,
@@ -115,9 +109,9 @@ public class KafkaCluster {
         }
     }
 
-    private static void crateKafkaServersPropertiesFiles(final Properties kafkaClusterProperties,
-                                                         final String kafkaServerPropertiesPath,
-                                                         final String propertiesTempPath) throws IOException {
+    public static void crateKafkaServersPropertiesFiles(final Properties kafkaClusterProperties,
+                                                        final String kafkaServerPropertiesPath,
+                                                        final String propertiesTempPath) throws IOException {
         // Read kafka server properties.
         final Properties kafkaServerProperties = readProperties(kafkaServerPropertiesPath);
 
@@ -149,7 +143,7 @@ public class KafkaCluster {
         properties.store(outputStream, null);
     }
 
-    private static void createFolder(final String propertiesTempPath) throws IOException {
+    public static void createFolder(final String propertiesTempPath) throws IOException {
         if (new File(propertiesTempPath).exists()) {
             Files.walk(Paths.get(propertiesTempPath))
                     .sorted(Comparator.reverseOrder())
@@ -162,31 +156,16 @@ public class KafkaCluster {
     }
 
     public static ExecutorService getExecutorService() {
-        return new ThreadPoolExecutor(6, 10, 1L, TimeUnit.MILLISECONDS,
+        return new ThreadPoolExecutor(6, 100, 1L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<Runnable>());
     }
 
-    private static KafkaClusterComponent
+    public static KafkaClusterComponent
     startKafkaComponent(final KafkaClusterComponent kafkaComponent) throws IOException {
         return kafkaComponent.start();
     }
 
-    private static Properties producerConsumerProperties() {
-        final Properties props = new Properties();
-        // producer:
-        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("bootstrap.servers", "localhost:9092");
-        props.put("acks", "all");
-        props.put("linger.ms", 1); // set to 0 let Producer can send message immediately
-        // consumer:
-        props.put("group.id", "test-group");
-        return props;
-    }
-
-    private static Properties kafkaClusterProperties(String path) throws IOException {
+    public static Properties kafkaClusterProperties(String path) throws IOException {
         if (path == null || path.isEmpty()) {
             path = "./src/main/resources/properties/kafka-cluster.properties";
         }
@@ -199,8 +178,8 @@ public class KafkaCluster {
         return props;
     }
 
-    private static void stopWithShutdownHook(final ExecutorService executorService,
-                                             final KafkaClusterComponent... components) {
+    public static void stopWithShutdownHook(final ExecutorService executorService,
+                                            final KafkaClusterComponent... components) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
                 for (final KafkaClusterComponent component : components) {
@@ -211,5 +190,11 @@ public class KafkaCluster {
             }
             executorService.shutdownNow();
         }));
+    }
+
+    public static void redirectOutputToStdOut(final Process process,
+                                       final ExecutorService executorService) {
+        final StreamGobbler streamGobbler = new StreamGobbler(process.getInputStream());
+        executorService.execute(streamGobbler);
     }
 }

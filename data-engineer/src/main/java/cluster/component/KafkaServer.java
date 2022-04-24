@@ -22,7 +22,7 @@ public class KafkaServer extends KafkaClusterComponent {
     }
 
     public KafkaServer start() throws IOException {
-        System.out.println("Starting Kafka Server.");
+        starting();
         this.zookeeperProcess = Runtime.getRuntime().exec(
                 startZookeeperSh + " " + kafkaServerPropertiesFile
         );
@@ -31,7 +31,7 @@ public class KafkaServer extends KafkaClusterComponent {
     }
 
     public KafkaServer stop() throws IOException {
-        System.out.println("Shutting down Kafka Server.");
+        stopping();
         this.zookeeperStopProcess = Runtime.getRuntime().exec(
                 stopZookeeperSh
         );
