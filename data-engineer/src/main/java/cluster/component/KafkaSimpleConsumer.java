@@ -54,7 +54,7 @@ public class KafkaSimpleConsumer extends KafkaClusterComponent {
         // Kafka Consumer subscribes list of topics here.
         consumer.subscribe(Arrays.asList(topic));
         // Print the topic name.
-        System.out.println(this + " subscribed to topic: " + topic);
+        System.out.println(prettyDate() + this + " subscribed to topic: " + topic);
 
         if (forwardProducer != null) {
             forwardProducer.start();

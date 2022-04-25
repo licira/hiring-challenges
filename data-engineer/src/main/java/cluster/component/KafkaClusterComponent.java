@@ -1,11 +1,12 @@
 package cluster.component;
 
 import cluster.KafkaCluster;
-import helper.StreamGobbler;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -20,7 +21,8 @@ public abstract class KafkaClusterComponent {
     }
 
     protected void printSent(final ProducerRecord producerRecord) {
-        System.out.printf("%s sent: {topic = %s, key = %s, value = %s}\n",
+        System.out.printf(prettyDate() +
+                        "%s sent: {topic = %s, key = %s, value = %s}\n",
                 this,
                 producerRecord.topic(),
                 producerRecord.key(),
@@ -28,7 +30,8 @@ public abstract class KafkaClusterComponent {
     }
 
     protected void printReceived(final ConsumerRecord record) {
-        System.out.printf("%s received: {topic = %s, offset = %d, key = %s, value = %s}\n",
+        System.out.printf(prettyDate() +
+                        "%s received: {topic = %s, offset = %d, key = %s, value = %s}\n",
                 this,
                 record.topic(),
                 record.offset(),
@@ -59,18 +62,24 @@ public abstract class KafkaClusterComponent {
     }
 
     protected void starting() {
-        System.out.println("Starting: " + this);
+        System.out.println(prettyDate() + "Starting: " + this);
     }
 
     protected void stopping() {
-        System.out.println("Stopping: " + this);
+        System.out.println(prettyDate() + "Stopping: " + this);
     }
 
     protected void iterating() {
-        System.out.println(this + " iterating...");
+        System.out.println(prettyDate() + this + " iterating...");
     }
 
     protected Future submit(final Callable task) {
         return executorService.submit(task);
+    }
+
+    protected String prettyDate() {
+        return "[" +
+                new SimpleDateFormat("yyyy.MM.dd HH.mm.ss").format(new Date()) +
+                "] ";
     }
 }

@@ -51,7 +51,7 @@ public class KafkaForwardProducer<E> extends KafkaClusterComponent {
 
                 sleep(5000);
 
-                System.out.println(this + " iterating...");
+                iterating();
 
                 for (final E value : q.pollAll()) {
                     final ProducerRecord<String, String> producerRecord =
