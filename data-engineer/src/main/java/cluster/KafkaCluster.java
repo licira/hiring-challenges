@@ -48,7 +48,7 @@ public class KafkaCluster {
 
         startKafkaComponent(new KafkaFileProducer(properties,
                 kafkaClusterProperties.getProperty("kafka.topic"),
-                "/Users/liviuc/Documents/work/hiring-challenges/data-engineer/src/main/resources/stream.json",
+                kafkaClusterProperties.getProperty("kafka.producer.file.path"),
                 executorService));
     }
 
