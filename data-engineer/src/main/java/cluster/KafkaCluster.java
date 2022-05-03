@@ -3,6 +3,8 @@ package cluster;
 import cluster.component.*;
 import helper.Count;
 import helper.StreamGobbler;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -36,6 +38,42 @@ public class KafkaCluster {
                 synchronizedCounter,
                 executorService));
 
+    }
+
+
+    public static void startKafkaStreams(final Properties kafkaClusterProperties,
+                                         final ExecutorService executorService) throws IOException {
+        final Properties properties =
+                readProperties(kafkaClusterProperties.getProperty("kafka.streams.properties"));
+
+        final String bootstrapServers = bootstrapServers(Integer.parseInt(kafkaClusterProperties.getProperty("kafka.servers")));
+        properties.put("bootstrap.servers", bootstrapServers);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
+                Serdes.String().getClass().getName());
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
+                Serdes.String().getClass().getName());
+        properties.put("commit.interval.ms", "1000");
+        properties.put("log4j.appender.stdout", "org.apache.log4j.ConsoleAppender");
+        properties.put("log4j.appender.stdout.layout", "org.apache.log4j.PatternLayout");
+        properties.put("log4j.appender.stdout.layout.ConversionPattern", "[%d] %p %m (%c)%n");
+        properties.put("log4j.rootLogger", "OFF, stdout");
+
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-sec");
+        properties.put("window.duration", "1");
+        properties.put("window.unit", "s");
+        startKafkaComponent(new KafkaStream(properties, executorService));
+
+//        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-day");
+//        startKafkaComponent(new KafkaStream(properties, executorService));
+//
+//        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-week");
+//        startKafkaComponent(new KafkaStream(properties, executorService));
+//
+//        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-month");
+//        startKafkaComponent(new KafkaStream(properties, executorService));
+//
+//        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-year");
+//        startKafkaComponent(new KafkaStream(properties, executorService));
     }
 
     public static void startKafkaProducers(final Properties kafkaClusterProperties,
@@ -193,7 +231,7 @@ public class KafkaCluster {
     }
 
     public static void redirectOutputToStdOut(final Process process,
-                                       final ExecutorService executorService) {
+                                              final ExecutorService executorService) {
         final StreamGobbler streamGobbler = new StreamGobbler(process.getInputStream());
         executorService.execute(streamGobbler);
     }

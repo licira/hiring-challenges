@@ -20,6 +20,10 @@ public abstract class KafkaClusterComponent {
         stopWithShutdownHook();
     }
 
+    protected void printInfo(final String info) {
+        System.out.printf(prettyDate() + "%s ", info);
+    }
+
     protected void printSent(final ProducerRecord producerRecord) {
         System.out.printf(prettyDate() +
                         "%s sent: {topic = %s, key = %s, value = %s}\n",

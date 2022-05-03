@@ -3,7 +3,7 @@
 The goal of the challenge is to have a tool that is able to stream data from 
 [kafka](http://kafka.apache.org/) and count unique things within this data. The simplest use case is
 that we want to calculate unique users per minute, day, week, month, year. For a very first version, 
-business wants us to provide just the unique users per minute.   
+business wants us to provide just the unique users per minute.
 
 - The data consists of (Log)-Frames of JSON data that are streamed into/from apache kafka. 
 - Each frame has a timestamp property which is unix time, the name of the property is `ts`.
