@@ -63,6 +63,13 @@ public class KafkaCluster {
         properties.put("window.unit", "s");
         startKafkaComponent(new KafkaStream(properties, executorService));
 
+        final Properties newProperties = new Properties(properties);
+        newProperties.putAll(properties);
+        newProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-3-sec");
+        newProperties.put("window.duration", "3");
+        newProperties.put("window.unit", "s");
+        startKafkaComponent(new KafkaStream(newProperties, executorService));
+
 //        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-1-day");
 //        startKafkaComponent(new KafkaStream(properties, executorService));
 //

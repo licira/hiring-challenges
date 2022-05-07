@@ -16,30 +16,34 @@ import org.apache.kafka.streams.kstream.*;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
 public class KafkaStream extends KafkaClusterComponent {
 
-
-    private final StreamsBuilder builder;
     private final Properties properties;
     private KafkaStreams kafkaStreams;
 
     public KafkaStream(final Properties properties,
                        final ExecutorService executorService) {
         super(executorService);
-        this.builder = new StreamsBuilder();
         this.properties = properties;
+    }
+
+    public static Serde<JsonNode> jsonSerdes() {
+        final Serializer<JsonNode> jsonNodeSerializer = new JsonSerializer();
+        final Deserializer<JsonNode> jsonNodeDeserializer = new JsonDeserializer();
+        return Serdes.serdeFrom(jsonNodeSerializer, jsonNodeDeserializer);
     }
 
     @Override
     public KafkaClusterComponent start() throws IOException {
         starting();
+
+        final StreamsBuilder builder = new StreamsBuilder();
         //kafkaStreams.start();
         // Initial stream
         final KStream<String, JsonNode> stream =
-                this.builder.stream("my-topic", Consumed.with(Serdes.String(), jsonSerdes()));
+                builder.stream("my-topic", Consumed.with(Serdes.String(), jsonSerdes()));
 
         // Window by duration
         final KStream<Windowed<String>, Long> byUidGroupedByWindow =
@@ -70,48 +74,8 @@ public class KafkaStream extends KafkaClusterComponent {
 
         this.kafkaStreams = new KafkaStreams(builder.build(), this.properties);
         this.kafkaStreams.start();
+
         return this;
-    }
-
-    private Callable task() {
-        return () -> {
-            //kafkaStreams.start();
-            // Initial stream
-            final KStream<String, JsonNode> stream =
-                    this.builder.stream("my-topic", Consumed.with(Serdes.String(), jsonSerdes()));
-
-            // Window by duration
-            final KStream<Windowed<String>, Long> byUidGroupedByWindow =
-                    stream.selectKey((key, value) -> value.get("uid").toString())
-                            .groupByKey()
-                            .windowedBy(tumblingWindows())
-                            .count()
-                            .toStream();
-
-            byUidGroupedByWindow
-                    .selectKey((key, value) -> String.valueOf(key.window().start())
-                            .concat("/")
-                            .concat(String.valueOf(key.window().end())))
-                    .groupByKey()
-                    .count()
-                    .toStream()
-                    .map((key, value) -> withPayload(key, value))
-                    .to("forward-topic", Produced.with(Serdes.String(), Serdes.String()));
-
-            // for debugging purposes
-//        stream.groupByKey()
-//                .windowedBy(TimeWindows.of(oneMinute))
-//                .count()
-//                .toStream()
-//                .foreach((key, value) -> System.out.println(
-//                        "Count all per window: " +
-//                                "key: " + key + " value: " + value));
-
-            this.kafkaStreams = new KafkaStreams(builder.build(), this.properties);
-            this.kafkaStreams.start();
-
-            return true;
-        };
     }
 
     private KeyValue<String, String> withPayload(String key, Long value) {
@@ -124,7 +88,18 @@ public class KafkaStream extends KafkaClusterComponent {
         return new KeyValue<String, String>(key, payload.toString());
     }
 
-    private TimeWindows tumblingWindows() {
+//    public SlidingWindows tumblingWindows() {
+//        final long windowDuration = Long.parseLong(this.properties.getProperty("window.duration"));
+//        final String windowUnit = this.properties.getProperty("window.unit");
+//
+//        if ("s".equals(windowUnit)) {
+//            final Duration duration = Duration.ofSeconds(windowDuration);
+//            return SlidingWindows.withTimeDifferenceAndGrace(duration, Duration.ofSeconds(0));
+//        }
+//        throw new IllegalArgumentException();
+//    }
+
+    public TimeWindows tumblingWindows() {
         final long windowDuration = Long.parseLong(this.properties.getProperty("window.duration"));
         final String windowUnit = this.properties.getProperty("window.unit");
 
@@ -144,14 +119,9 @@ public class KafkaStream extends KafkaClusterComponent {
 
     @Override
     public KafkaClusterComponent stop() throws IOException {
+        kafkaStreams.close();
 //        kafkaStreams.cleanUp();
 //        kafkaStreams.close();
         return this;
-    }
-
-    private Serde<JsonNode> jsonSerdes() {
-        final Serializer<JsonNode> jsonNodeSerializer = new JsonSerializer();
-        final Deserializer<JsonNode> jsonNodeDeserializer = new JsonDeserializer();
-        return Serdes.serdeFrom(jsonNodeSerializer, jsonNodeDeserializer);
     }
 }

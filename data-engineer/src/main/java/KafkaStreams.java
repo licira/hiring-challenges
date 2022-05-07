@@ -20,9 +20,10 @@ public class KafkaStreams {
         final Properties kafkaClusterProperties =
                 KafkaCluster.kafkaClusterProperties(kafkaClusterPropertiesPath);
 
+
         KafkaCluster.startKafkaStreams(kafkaClusterProperties, executorService);
 
-        KafkaCluster.stopWithShutdownHook(executorService);
+        //KafkaCluster.stopWithShutdownHook(executorService);
 
         executorService.shutdown();
     }
